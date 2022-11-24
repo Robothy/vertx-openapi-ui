@@ -1,0 +1,137 @@
+import io.franzbecker.gradle.lombok.task.DelombokTask
+
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'com.robothy.github-repository-release-plugin' version '1.0'
+    id 'signing'
+    id 'io.franzbecker.gradle-lombok' version '5.0.0'
+}
+
+group 'io.github.robothy'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${findProperty('jupiter.version')}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${findProperty('jupiter.version')}"
+    implementation "io.vertx:vertx-web-openapi:${findProperty('vertx.version')}"
+    implementation "io.vertx:vertx-web:${findProperty('vertx.version')}"
+    implementation "io.vertx:vertx-core:${findProperty('vertx.version')}"
+    implementation "io.swagger.core.v3:swagger-core:2.2.6"
+    implementation "net.bytebuddy:byte-buddy:${findProperty('bytebuddy.version')}"
+    implementation "net.bytebuddy:byte-buddy-agent:${findProperty('bytebuddy.version')}"
+    implementation "org.projectlombok:lombok:${findProperty('lombok.version')}"
+    annotationProcessor "org.projectlombok:lombok:${findProperty('lombok.version')}"
+    testCompileOnly "org.projectlombok:lombok:${findProperty('lombok.version')}"
+    testAnnotationProcessor "org.projectlombok:lombok:${findProperty('lombok.version')}"
+    testImplementation "io.vertx:vertx-junit5:${findProperty('vertx.version')}"
+    testImplementation "io.rest-assured:rest-assured:${findProperty('rest-assured.version')}"
+
+    testRuntimeOnly "ch.qos.logback:logback-core:${findProperty('ch.qos.logback.logback-core')}"
+    testRuntimeOnly "ch.qos.logback:logback-classic:${findProperty('ch.qos.logback.logback-classic')}"
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+
+    publications {
+        maven(MavenPublication) {
+            groupId = group
+            artifactId = project.name
+            from components.java
+
+            pom {
+                name = "LocalS3"
+                description = 'An AmazonS3 service implementation.'
+                url = 'https://github.com/Robothy/vertx-openapi-ui'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'robothy'
+                        name = "Fuxiang Luo"
+                        email = "robothyluo@gmail.com"
+                    }
+                }
+
+                scm {
+                    url = "https://github.com/Robothy/vertx-openapi-ui.git"
+                }
+
+            }
+        }
+    }
+
+    repositories {
+        mavenLocal()
+
+        maven {
+            name = "MavenCentral"
+            url = uri('https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/')
+            credentials {
+                username = findProperty("OSSRH_USERNAME")
+                password = findProperty("OSSRH_PASSWORD")
+            }
+        }
+
+    }
+
+}
+
+signing {
+    def signingKey
+    if (findProperty("signingKeyRingFile") != null) {
+        signingKey = Files.readString(file(findProperty("signing.secretKeyRingFile")).toPath())
+    } else {
+        signingKey = findProperty("signing.secretKey")
+    }
+    def signingPassword = findProperty("signing.password")
+    useInMemoryPgpKeys(signingKey, signingPassword)
+    sign publishing.publications.maven
+}
+
+
+task delombok(type: DelombokTask, dependsOn: compileJava) {
+    ext.outputDir = file("$buildDir/delombok")
+    outputs.dir(outputDir)
+    sourceSets.main.java.srcDirs.each {
+        inputs.dir(it)
+        args(it, "-d", outputDir)
+    }
+}
+
+javadoc {
+    dependsOn delombok
+    source = delombok.outputDir
+    //failOnError = false
+}
+
+
+task generateBytecode(type: JavaExec) {
+    description = "Generate redeinfed bytecode."
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set("io.vertx.ext.web.openapi.ui.GenerateTypes")
+    args = ["src/main/resources/redefinitions"]
+}
+
+tasks.jar.dependsOn(generateBytecode)
+tasks.test.dependsOn(generateBytecode)

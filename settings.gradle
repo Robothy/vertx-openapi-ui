@@ -1,0 +1,14 @@
+pluginManagement {
+
+    repositories {
+        mavenLocal()
+
+        maven {
+            url = 'https://nexus.ship.gov.sg/repository/maven2-gradle/'
+        }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'vertx-openapi-ui'
+
